@@ -2,8 +2,19 @@ using Unity.Collections;
 using UnityEngine;
 using UnityEngine.U2D;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace Beatrate.KiwiSprite
 {
+	public enum Sprite3DBillboardMode
+	{
+		None = 0,
+		Y = 1,
+		XYZ = 2
+	}
+
 	[ExecuteAlways]
 	[RequireComponent(typeof(MeshRenderer), typeof(MeshFilter))]
 	public class Sprite3DRenderer : MonoBehaviour
@@ -58,6 +69,21 @@ namespace Beatrate.KiwiSprite
 		}
 		[SerializeField]
 		private bool flipY = false;
+
+		public Sprite3DBillboardMode BillboardMode
+		{
+			get => billboardMode;
+			set
+			{
+				if(billboardMode != value)
+				{
+					billboardMode = value;
+					RebuildMaterial();
+				}
+			}
+		}
+		[SerializeField]
+		private Sprite3DBillboardMode billboardMode = Sprite3DBillboardMode.None;
 
 		public Material SharedMaterial
 		{
@@ -164,7 +190,19 @@ namespace Beatrate.KiwiSprite
 		{
 			RebuildMesh();
 			RebuildMaterial();
-		}	
+		}
+
+#if UNITY_EDITOR
+		[MenuItem("GameObject/3D Object/Sprite 3D", false, 10)]
+		private static void CreateSpriteRenderer(MenuCommand command)
+		{
+			GameObject go = new GameObject("Sprite 3D");
+			GameObjectUtility.SetParentAndAlign(go, command.context as GameObject);
+			go.AddComponent<Sprite3DRenderer>();
+			Undo.RegisterCreatedObjectUndo(go, "Create " + go.name);
+			Selection.activeObject = go;
+		}
+#endif
 
 		private void SafeDestroy(UnityEngine.Object o)
 		{
@@ -221,6 +259,10 @@ namespace Beatrate.KiwiSprite
 				mesh.SetIndices(indicesCopy, MeshTopology.Triangles, 0);
 				mesh.SetUVs(0, uvs);
 				mesh.SetSubMesh(0, new UnityEngine.Rendering.SubMeshDescriptor(0, indices.Length, MeshTopology.Triangles));
+				mesh.RecalculateBounds();
+				Bounds bounds = mesh.bounds;
+				bounds.size = new Vector3(bounds.size.x, bounds.size.y, bounds.size.x);
+				mesh.bounds = bounds;
 
 				vertices.Dispose();
 				indicesCopy.Dispose();
@@ -272,8 +314,10 @@ namespace Beatrate.KiwiSprite
 			}
 			
 			propertyBlock.SetFloat("_EnableExternalAlpha", enableExternalAlpha ? 1.0f : 0.0f);
-			propertyBlock.SetFloat("_FlipX", flipX ? 1.0f : 0.0f);
-			propertyBlock.SetFloat("_FlipY", flipY ? 1.0f : 0.0f);
+			Vector2 flip = new Vector2(flipX ? -1.0f : 1.0f, flipY ? -1.0f : 1.0f);
+			propertyBlock.SetVector("_Flip", flip);
+
+			propertyBlock.SetInteger("_BillboardMode", (int)billboardMode);
 
 			MeshRenderer.SetPropertyBlock(propertyBlock);
 		}
